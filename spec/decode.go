@@ -36,7 +36,7 @@ func JrpcTypeString(tp JrpcType) string {
 	return "TypeNone"
 }
 
-// Converts byte slice to JsonRpc and returns its Object and Type.
+// Converts byte slice to JsonRpc and returns map[Object] and Type.
 // [Request, Response, Notification, Error, BatchRequest, BatchResponse, None]
 func GetJrpcType(data []byte) (interface{}, JrpcType) {
 	switch GetJsonType(data) {
