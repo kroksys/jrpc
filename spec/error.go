@@ -18,8 +18,8 @@ type Error struct {
 
 // Returns new Error object with provided ErrorCode and data.
 // Sets Error message using ErrorCode
-func NewError(code ErrorCode, data interface{}) Error {
-	return Error{
+func NewError(code ErrorCode, data interface{}) *Error {
+	return &Error{
 		Code:    code,
 		Message: ErrorMessage(code),
 		Data:    data,
@@ -40,8 +40,6 @@ const (
 	MethodNotFoundCode ErrorCode = -32601
 	InvalidParamsCode  ErrorCode = -32602
 	InternalErrorCode  ErrorCode = -32603
-	MethodExistsCode   ErrorCode = -32000
-	URLSchemeErrorCode ErrorCode = -32001
 )
 
 type ErrorMsg string
@@ -53,8 +51,6 @@ const (
 	InvalidParamsMsg  ErrorMsg = "Invalid params"
 	InternalErrorMsg  ErrorMsg = "Internal error"
 	ServerErrorMsg    ErrorMsg = "Server error"
-	MethodExistsMsg   ErrorMsg = "Method exists"
-	URLSchemeErrorMsg ErrorMsg = "URL scheme error"
 )
 
 func ErrorMessage(code ErrorCode) ErrorMsg {
@@ -69,10 +65,6 @@ func ErrorMessage(code ErrorCode) ErrorMsg {
 		return InvalidParamsMsg
 	case InternalErrorCode:
 		return InternalErrorMsg
-	case MethodExistsCode:
-		return MethodExistsMsg
-	case URLSchemeErrorCode:
-		return URLSchemeErrorMsg
 	default:
 		return ServerErrorMsg
 	}

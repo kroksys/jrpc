@@ -7,7 +7,7 @@ type Response struct {
 	// This member is REQUIRED on success.
 	// This member MUST NOT exist if there was an error invoking the method.
 	// The value of this member is determined by the method invoked on the Server.
-	Result *interface{} `json:"result,omitempty"`
+	Result interface{} `json:"result,omitempty"`
 
 	// This member is REQUIRED on error.
 	// This member MUST NOT exist if there was no error triggered during invocation.
@@ -28,7 +28,7 @@ func NewResponse(id interface{}, result interface{}) Response {
 	return Response{
 		Jsonrpc: JsonRpcVersion,
 		ID:      id,
-		Result:  &result,
+		Result:  result,
 	}
 }
 
