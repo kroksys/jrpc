@@ -1,4 +1,4 @@
-package jrpc
+package main
 
 import (
 	"context"

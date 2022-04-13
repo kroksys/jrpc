@@ -1,4 +1,4 @@
-package jrpc
+package main
 
 import (
 	"context"
@@ -9,13 +9,18 @@ import (
 )
 
 func NewGinWebsocketServer(host string) {
+	gin.SetMode(gin.ReleaseMode)
 	jrpcServer := NewServer()
 	if err := jrpcServer.Register("example", Example{}); err != nil {
 		log.Panicln(err)
 	}
 	r := gin.Default()
 	r.GET("/ws", gin.WrapF(jrpcServer.WebsocketHandler))
-	r.Run(host)
+	log.Printf("JSON RPC 2.0 server started. Address: %s/ws\n", host)
+	err := r.Run(host)
+	if err != nil {
+		log.Println("jrpc server stopped")
+	}
 }
 
 type Example struct{}
