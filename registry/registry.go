@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	subscriptionType = reflect.TypeOf(Subscription{})
+	subscriptionType = reflect.TypeOf(&Subscription{})
 	errorType        = reflect.TypeOf((*error)(nil)).Elem()
 	contextType      = reflect.TypeOf((*context.Context)(nil)).Elem()
 )
@@ -27,26 +27,37 @@ func NewRegistry() *Registry {
 	}
 }
 
-func (reg *Registry) Call(ctx context.Context, req spec.Request) spec.Response {
+func (reg *Registry) Call(ctx context.Context, req spec.Request, write ...chan<- spec.Notification) spec.Response {
 	result := spec.NewResponse(req.ID, nil)
 	split := strings.Split(req.Method, "_")
-	if len(split) != 2 {
+	if len(split) != 2 && len(split) != 3 {
 		result.Error = spec.NewError(spec.MethodNotFoundCode, "invalid method name")
 		return result
 	}
-	serviceName, methodName := split[0], split[1]
-	method := reg.FindMethod(serviceName, methodName)
-	if method == nil {
+	serviceName, methodName := split[0], strings.ToLower(split[1])
+	var fn *Method
+	if methodName == "subscribe" {
+		var subscriptionName = ""
+		if len(split) == 3 {
+			subscriptionName = split[2]
+			fn = reg.FindSubscription(serviceName, subscriptionName)
+		} else {
+			fn = reg.FindSubscription(serviceName)
+		}
+	} else { // Method
+		fn = reg.FindMethod(serviceName, methodName)
+	}
+	if fn == nil {
 		result.Error = spec.NewError(spec.MethodNotFoundCode,
 			fmt.Sprintf("missing services %s method %s", serviceName, methodName))
 		return result
 	}
-	args, err := method.ParseArgs(req.Params)
+	args, err := fn.ParseArgs(req.Params)
 	if err != nil {
 		result.Error = spec.NewError(spec.InvalidParamsCode, err.Error())
 		return result
 	}
-	callResponse, err := method.Call(ctx, methodName, args)
+	callResponse, err := fn.Call(ctx, methodName, args, NewSubscription(methodName, write...))
 	if err != nil {
 		result.Error = spec.NewError(spec.InternalErrorCode, err.Error())
 		return result
@@ -78,15 +89,24 @@ func (reg *Registry) FindMethod(service, name string) *Method {
 	return reg.services[service].methods[name]
 }
 
-func (reg *Registry) FindSubscription(service, name string) *Subscription {
+func (reg *Registry) FindSubscription(service string, name ...string) *Method {
 	reg.lock.Lock()
 	defer reg.lock.Unlock()
-	return reg.services[service].subscriptions[name]
+	if len(name) == 1 {
+		return reg.services[service].subscriptions[name[0]]
+	}
+	if len(reg.services[service].subscriptions) != 1 {
+		return nil
+	}
+	for k := range reg.services[service].subscriptions {
+		return reg.services[service].subscriptions[k]
+	}
+	return nil
 }
 
-func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method, map[string]*Subscription) {
+func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method, map[string]*Method) {
 	methods := make(map[string]*Method)
-	subscriptions := make(map[string]*Subscription)
+	subscriptions := make(map[string]*Method)
 	structType := theStruct.Type()
 	for i := 0; i < structType.NumMethod(); i++ {
 		m := structType.Method(i)
@@ -97,48 +117,39 @@ func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method
 		// Arguments
 		args := []reflect.Type{}
 		hasCtx := false
+		responseChanPos := -1
 		for j := 1; j < fntype.NumIn(); j++ {
 			if j == 1 && fntype.In(j) == contextType {
 				hasCtx = true
 				continue
 			}
+			if fntype.In(j) == subscriptionType {
+				responseChanPos = j + 1
+			}
 			args = append(args, fntype.In(j))
 		}
 		// Returns
-		numOut := fntype.NumOut()
 		errPos := -1
-		isSubscription := false
-		if numOut > 2 {
+		if fntype.NumOut() > 2 {
 			continue
 		}
-		if numOut == 2 {
-			if !reg.isErrorType(fntype.Out(1)) {
-				continue
-			}
-			errPos = 1
-			isSubscription = reg.isSubscriptionType(fntype.Out(0))
-		}
-		if numOut == 1 {
-			if reg.isErrorType(fntype.Out(0)) {
-				errPos = 0
+		for j := 0; j < fntype.NumOut(); j++ {
+			if reg.isErrorType(fntype.Out(j)) {
+				errPos = j
 			}
 		}
-		if isSubscription {
-			subscriptions[strings.ToLower(m.Name)] = &Subscription{
-				receiver: theStruct,
-				fn:       m.Func,
-				args:     args,
-				errPos:   errPos,
-				hasCtx:   hasCtx,
-			}
+		meth := &Method{
+			receiver: theStruct,
+			fn:       m.Func,
+			args:     args,
+			errPos:   errPos,
+			hasCtx:   hasCtx,
+			chanPos:  responseChanPos,
+		}
+		if responseChanPos != -1 {
+			subscriptions[strings.ToLower(m.Name)] = meth
 		} else {
-			methods[strings.ToLower(m.Name)] = &Method{
-				receiver: theStruct,
-				fn:       m.Func,
-				args:     args,
-				errPos:   errPos,
-				hasCtx:   hasCtx,
-			}
+			methods[strings.ToLower(m.Name)] = meth
 		}
 	}
 	return methods, subscriptions
@@ -149,11 +160,4 @@ func (*Registry) isErrorType(t reflect.Type) bool {
 		t = t.Elem()
 	}
 	return t.Implements(errorType)
-}
-
-func (*Registry) isSubscriptionType(t reflect.Type) bool {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	return t == subscriptionType
 }

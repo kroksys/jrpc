@@ -13,7 +13,7 @@ type Notification struct {
 	// This member MAY be omitted.
 	//
 	// Array or Object from javascript JSON
-	Params string `json:"params"`
+	Params interface{} `json:"params"`
 }
 
 // Returns new notification object with JsonRpc version attached

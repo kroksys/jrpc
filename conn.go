@@ -1,15 +1,12 @@
 package jrpc
 
 import (
-	"context"
-	"encoding/json"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
-	"github.com/kroksys/jrpc/registry"
 	"github.com/kroksys/jrpc/spec"
 )
 
@@ -24,48 +21,19 @@ type Conn struct {
 	out      chan []byte
 	exit     chan interface{}
 	exitOnce sync.Once
-	registry *registry.Registry
+	Write    chan spec.Notification
 }
 
-func newConn(c net.Conn, reg *registry.Registry) *Conn {
+func newConn(c net.Conn) *Conn {
 	conn := Conn{
-		C:        c,
-		in:       make(chan []byte),
-		out:      make(chan []byte),
-		exit:     make(chan interface{}),
-		registry: reg,
+		C:     c,
+		in:    make(chan []byte),
+		out:   make(chan []byte),
+		exit:  make(chan interface{}),
+		Write: make(chan spec.Notification),
 	}
 	conn.goRead()
 	return &conn
-}
-
-func (c *Conn) defaultHandler() {
-	pinger := time.NewTicker(pingPeriod)
-	defer pinger.Stop()
-	for {
-		select {
-		case msg := <-c.in:
-			data, tp := spec.Parse(msg)
-			switch tp {
-			case spec.TypeRequest:
-				request := data.(spec.Request)
-				response := c.registry.Call(context.TODO(), request)
-				responseData, err := json.Marshal(response)
-				if err != nil {
-					continue
-				}
-				go func() {
-					c.out <- responseData
-				}()
-			}
-		case msg := <-c.out:
-			c.write(msg)
-		case <-pinger.C:
-			c.ping()
-		case <-c.exit:
-			return
-		}
-	}
 }
 
 func (c *Conn) ping() {

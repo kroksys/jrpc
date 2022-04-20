@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"reflect"
 	"runtime"
 )
@@ -14,6 +15,7 @@ type Method struct {
 	args     []reflect.Type
 	errPos   int
 	hasCtx   bool
+	chanPos  int
 }
 
 func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
@@ -30,10 +32,16 @@ func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
 	return result, nil
 }
 
-func (m *Method) Call(ctx context.Context, method string, args []reflect.Value) (res interface{}, errRes error) {
+func (m *Method) Call(ctx context.Context, method string, args []reflect.Value, sub *Subscription) (res interface{}, errRes error) {
 	callArgs := []reflect.Value{m.receiver}
 	if m.hasCtx {
 		callArgs = append(callArgs, reflect.ValueOf(ctx))
+	}
+	if m.chanPos != -1 {
+		if sub == nil {
+			return nil, errors.New("expected subscription but output channel was missing")
+		}
+		callArgs = append(callArgs, reflect.ValueOf(sub))
 	}
 	callArgs = append(callArgs, args...)
 
@@ -43,7 +51,7 @@ func (m *Method) Call(ctx context.Context, method string, args []reflect.Value) 
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			buf = nil
+			fmt.Fprintln(ioutil.Discard, buf)
 			errRes = errors.New("method handler crashed")
 		}
 	}()

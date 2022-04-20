@@ -6,8 +6,8 @@ import (
 
 // Convert byte slice to T object. Returns nil if JrpcType = TypeNone.
 func fromBytes[T any](data []byte, tp JrpcType) *T {
-	obj, tp := GetJrpcType(data)
-	if tp == tp {
+	obj, t := GetJrpcType(data)
+	if t == tp {
 		return fromMap[T](obj)
 	}
 	return nil
@@ -51,22 +51,16 @@ func Parse(data []byte) (interface{}, JrpcType) {
 	switch tp {
 	case TypeBatchRequest:
 		res = BatchRequest{}
-		break
 	case TypeRequest:
 		res = Request{}
-		break
 	case TypeBatchResponse:
 		res = BatchResponse{}
-		break
 	case TypeResponse:
 		res = Response{}
-		break
 	case TypeError:
 		res = Error{}
-		break
 	case TypeNotification:
 		res = Notification{}
-		break
 	}
 	mapstructure.Decode(obj, &res)
 	return res, tp
