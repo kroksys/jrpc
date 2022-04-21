@@ -36,6 +36,7 @@ func newConn(c net.Conn) *Conn {
 	return &conn
 }
 
+// Sends ping message to the connection
 func (c *Conn) ping() {
 	err := wsutil.WriteServerMessage(c.C, ws.OpPing, ws.CompiledPing)
 	if err != nil {
@@ -44,15 +45,18 @@ func (c *Conn) ping() {
 	}
 }
 
+// Closes connection and its channels
 func (c *Conn) close() {
 	c.exitOnce.Do(func() {
 		wsutil.WriteServerMessage(c.C, ws.OpClose, nil)
 		close(c.exit)
 		close(c.in)
 		close(c.out)
+		close(c.Write)
 	})
 }
 
+// gorutine for reading messages from connection
 func (c *Conn) goRead() {
 	go func() {
 		for {
@@ -66,6 +70,7 @@ func (c *Conn) goRead() {
 	}()
 }
 
+// writes data to the connection
 func (c *Conn) write(msg []byte) {
 	err := wsutil.WriteServerMessage(c.C, ws.OpText, msg)
 	if err != nil {

@@ -12,16 +12,20 @@ import (
 	"github.com/kroksys/jrpc/spec"
 )
 
+// Server is just a parent for json-rpc server using websockets
 type Server struct {
 	*registry.Registry
 }
 
+// Creates new server with initialised registry
 func NewServer() *Server {
 	return &Server{
 		Registry: registry.NewRegistry(),
 	}
 }
 
+// Http server handler to upgrade net.Conn to jrpc Conn and
+// forwards connection handling to the connection gorutines.
 func (s *Server) WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, _, _, err := ws.UpgradeHTTP(r, w)
 	if err != nil {
@@ -32,6 +36,9 @@ func (s *Server) WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	s.defaultConnHandler(newConn(conn))
 }
 
+// Main handler for jrpc Conn. It does ping, pong, reading, writing
+// and parsing incoming messages as jrpc objects.
+// When receives jrpc object it tries to execute a method from registry.
 func (s *Server) defaultConnHandler(c *Conn) {
 	defer c.close()
 	pinger := time.NewTicker(pingPeriod)
