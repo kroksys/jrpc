@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"reflect"
 	"runtime"
 )
@@ -57,7 +56,8 @@ func (m *Method) Call(ctx context.Context, method string, args []reflect.Value, 
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			fmt.Fprintln(ioutil.Discard, buf)
+			// fmt.Fprintln(ioutil.Discard, buf)
+			fmt.Println(buf)
 			errRes = errors.New("method handler crashed")
 		}
 	}()
