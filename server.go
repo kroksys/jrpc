@@ -9,8 +9,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gobwas/ws"
+	"github.com/kroksys/jrpc/conn"
 	"github.com/kroksys/jrpc/registry"
 	"github.com/kroksys/jrpc/spec"
+)
+
+const (
+	pingPeriod = time.Second * 30
 )
 
 // Server is just a parent for json-rpc server using websockets
@@ -25,52 +30,27 @@ func NewServer() *Server {
 	}
 }
 
-// Go gin handler. There is a bug that this handler does not work
-// with gin Group. Have no idea why. So its mandatory to use
-// gin router.GET() to register the route.
-func (s *Server) WebsocketHandlerGin(g *gin.Context) {
-	conn, _, _, err := ws.UpgradeHTTP(g.Request, g.Writer)
-	if err != nil {
-		log.Printf("upgrade error: %s", err)
-		return
-	}
-	defer conn.Close()
-	s.defaultConnHandler(newConn(conn), g)
-}
-
-// Http server handler to upgrade net.Conn to jrpc Conn and
-// forwards connection handling to the connection gorutines.
-func (s *Server) WebsocketHandler(w http.ResponseWriter, r *http.Request) {
-	conn, _, _, err := ws.UpgradeHTTP(r, w)
-	if err != nil {
-		log.Printf("upgrade error: %s", err)
-		return
-	}
-	defer conn.Close()
-	s.defaultConnHandler(newConn(conn), r.Context())
-}
-
 // Main handler for jrpc Conn. It does ping, pong, reading, writing
 // and parsing incoming messages as jrpc objects.
 // When receives jrpc object it tries to execute a method from registry.
-func (s *Server) defaultConnHandler(c *Conn, ctx context.Context) {
-	defer c.close()
+func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
+	defer c.Close()
 	pinger := time.NewTicker(pingPeriod)
 	defer pinger.Stop()
 	for {
 		select {
-		case msg := <-c.in:
+		case msg := <-c.In:
 			data, tp := spec.Parse(msg)
 			switch tp {
 			case spec.TypeRequest:
 				go func() {
 					request := data.(spec.Request)
-					resp := s.Registry.Call(ctx, request, c.Write)
+					resp := s.Registry.Call(ctx, request, c)
 					responseData, err := json.Marshal(resp)
 					if err != nil {
 						return
 					}
-					c.out <- responseData
+					c.Out <- responseData
 				}()
 			case spec.TypeNotification:
 				// notification := data.(spec.Notification)
@@ -81,14 +61,39 @@ func (s *Server) defaultConnHandler(c *Conn, ctx context.Context) {
 				if err != nil {
 					return
 				}
-				c.out <- responseData
+				c.Out <- responseData
 			}()
-		case msg := <-c.out:
-			c.write(msg)
+		case msg := <-c.Out:
+			c.Send(msg)
 		case <-pinger.C:
-			c.ping()
-		case <-c.exit:
+			c.Ping()
+		case <-c.Exit:
 			return
 		}
 	}
+}
+
+// Go gin handler. There is a bug that this handler does not work
+// with gin Group. Have no idea why. So its mandatory to use
+// gin router.GET() to register the route.
+func (s *Server) WebsocketHandlerGin(g *gin.Context) {
+	cn, _, _, err := ws.UpgradeHTTP(g.Request, g.Writer)
+	if err != nil {
+		log.Printf("upgrade error: %s", err)
+		return
+	}
+	defer cn.Close()
+	s.defaultConnHandler(conn.NewConn(cn), g)
+}
+
+// Http server handler to upgrade net.Conn to jrpc Conn and
+// forwards connection handling to the connection gorutines.
+func (s *Server) WebsocketHandler(w http.ResponseWriter, r *http.Request) {
+	cn, _, _, err := ws.UpgradeHTTP(r, w)
+	if err != nil {
+		log.Printf("upgrade error: %s", err)
+		return
+	}
+	defer cn.Close()
+	s.defaultConnHandler(conn.NewConn(cn), r.Context())
 }

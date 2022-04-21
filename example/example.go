@@ -29,7 +29,9 @@ func (Example) SimpleWithContext(ctx context.Context, x, y int) (int, error) {
 func (Example) Subscription(sub *registry.Subscription) error {
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
-		sub.Notify("Hello")
+		if !sub.Notify("Hello") {
+			return nil
+		}
 	}
 	return nil
 }
@@ -37,7 +39,9 @@ func (Example) Subscription(sub *registry.Subscription) error {
 func (Example) SubscriptionWithContext(ctx context.Context, sub *registry.Subscription) error {
 	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
-		sub.Notify("Hello")
+		if !sub.Notify("Hello") {
+			return errors.New("connection closed")
+		}
 	}
 	return errors.New("expected subscription break")
 }

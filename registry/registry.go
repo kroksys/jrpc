@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kroksys/jrpc/conn"
 	"github.com/kroksys/jrpc/spec"
 )
 
@@ -31,7 +32,7 @@ func NewRegistry() *Registry {
 
 // Call a method based on json-rpc Request. If a request is notification
 // a Notification struct will be initialised and write channel attached to it.
-func (reg *Registry) Call(ctx context.Context, req spec.Request, write ...chan<- spec.Notification) spec.Response {
+func (reg *Registry) Call(ctx context.Context, req spec.Request, c ...*conn.Conn) spec.Response {
 	result := spec.NewResponse(req.ID, nil)
 	split := strings.Split(req.Method, "_")
 	if len(split) != 2 && len(split) != 3 {
@@ -61,7 +62,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, write ...chan<-
 		result.Error = spec.NewError(spec.InvalidParamsCode, err.Error())
 		return result
 	}
-	callResponse, err := fn.Call(ctx, methodName, args, NewSubscription(methodName, write...))
+	callResponse, err := fn.Call(ctx, methodName, args, NewSubscription(methodName, c...))
 	if err != nil {
 		result.Error = spec.NewError(spec.InternalErrorCode, err.Error())
 		return result

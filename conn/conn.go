@@ -1,80 +1,86 @@
-package jrpc
+package conn
 
 import (
 	"net"
 	"sync"
-	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/kroksys/jrpc/spec"
 )
 
-const (
-	pingPeriod = 30 * time.Second
-)
-
 // Websocket connection wrapper to handle JsonRpc communication
 type Conn struct {
 	C        net.Conn
-	in       chan []byte
-	out      chan []byte
-	exit     chan interface{}
+	In       chan []byte
+	Out      chan []byte
+	Exit     chan interface{}
 	exitOnce sync.Once
+	Stopped  bool
 	Write    chan spec.Notification
 }
 
-func newConn(c net.Conn) *Conn {
+func NewConn(c net.Conn) *Conn {
 	conn := Conn{
 		C:     c,
-		in:    make(chan []byte),
-		out:   make(chan []byte),
-		exit:  make(chan interface{}),
+		In:    make(chan []byte),
+		Out:   make(chan []byte),
+		Exit:  make(chan interface{}),
 		Write: make(chan spec.Notification),
 	}
-	conn.goRead()
+	conn.GoRead()
 	return &conn
 }
 
 // Sends ping message to the connection
-func (c *Conn) ping() {
+func (c *Conn) Ping() {
+	if c.Stopped {
+		return
+	}
 	err := wsutil.WriteServerMessage(c.C, ws.OpPing, ws.CompiledPing)
 	if err != nil {
-		c.close()
+		c.Close()
 		return
 	}
 }
 
 // Closes connection and its channels
-func (c *Conn) close() {
+func (c *Conn) Close() {
 	c.exitOnce.Do(func() {
 		wsutil.WriteServerMessage(c.C, ws.OpClose, nil)
-		close(c.exit)
-		close(c.in)
-		close(c.out)
+		c.Stopped = true
+		close(c.Exit)
+		close(c.In)
+		close(c.Out)
 		close(c.Write)
 	})
 }
 
 // gorutine for reading messages from connection
-func (c *Conn) goRead() {
+func (c *Conn) GoRead() {
 	go func() {
 		for {
+			if c.Stopped {
+				return
+			}
 			msg, _, err := wsutil.ReadClientData(c.C)
 			if err != nil {
-				c.close()
+				c.Close()
 				break
 			}
-			c.in <- msg
+			c.In <- msg
 		}
 	}()
 }
 
 // writes data to the connection
-func (c *Conn) write(msg []byte) {
+func (c *Conn) Send(msg []byte) {
+	if c.Stopped {
+		return
+	}
 	err := wsutil.WriteServerMessage(c.C, ws.OpText, msg)
 	if err != nil {
-		c.close()
+		c.Close()
 		return
 	}
 }
