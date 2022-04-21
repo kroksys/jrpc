@@ -9,6 +9,8 @@ import (
 	"runtime"
 )
 
+// Method represents function in struct to be called.
+// Registering struct with registry reflects all methods as Method
 type Method struct {
 	receiver reflect.Value
 	fn       reflect.Value
@@ -18,6 +20,8 @@ type Method struct {
 	chanPos  int
 }
 
+// Transforms params interface coming from json parsed object to
+// reflect values. It is neccessary to Call a Method.
 func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
 	result := make([]reflect.Value, 0, len(m.args))
 	switch reflect.ValueOf(params).Kind() {
@@ -32,6 +36,8 @@ func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
 	return result, nil
 }
 
+// Executes function with given parameters. If a method is subscription it passes Subscription
+// that holds write channel using Subscription.Notify().
 func (m *Method) Call(ctx context.Context, method string, args []reflect.Value, sub *Subscription) (res interface{}, errRes error) {
 	callArgs := []reflect.Value{m.receiver}
 	if m.hasCtx {

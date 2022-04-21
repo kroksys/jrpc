@@ -16,17 +16,21 @@ var (
 	contextType      = reflect.TypeOf((*context.Context)(nil)).Elem()
 )
 
+// Registry for registering struct methods and subscriptions
 type Registry struct {
 	services map[string]Service
 	lock     sync.Mutex
 }
 
+// Creates new Registry with initialised services map
 func NewRegistry() *Registry {
 	return &Registry{
 		services: make(map[string]Service),
 	}
 }
 
+// Call a method based on json-rpc Request. If a request is notification
+// a Notification struct will be initialised and write channel attached to it.
 func (reg *Registry) Call(ctx context.Context, req spec.Request, write ...chan<- spec.Notification) spec.Response {
 	result := spec.NewResponse(req.ID, nil)
 	split := strings.Split(req.Method, "_")
@@ -66,6 +70,8 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, write ...chan<-
 	return result
 }
 
+// Register struct methods in registry. This should be called when server is
+// initialised.
 func (reg *Registry) Register(name string, service interface{}) error {
 	methods, subscriptions := reg.extractMethods(reflect.ValueOf(service))
 	if len(methods)+len(subscriptions) == 0 {
@@ -83,12 +89,15 @@ func (reg *Registry) Register(name string, service interface{}) error {
 	return nil
 }
 
+// Finds method in registry
 func (reg *Registry) FindMethod(service, name string) *Method {
 	reg.lock.Lock()
 	defer reg.lock.Unlock()
 	return reg.services[service].methods[name]
 }
 
+// Finds subscription in registry. Subscription in this case is just a method
+// that can be called.
 func (reg *Registry) FindSubscription(service string, name ...string) *Method {
 	reg.lock.Lock()
 	defer reg.lock.Unlock()
@@ -104,6 +113,8 @@ func (reg *Registry) FindSubscription(service string, name ...string) *Method {
 	return nil
 }
 
+// Extract functions/methods and subscriptions out of struct based on input and
+// output parameters.
 func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method, map[string]*Method) {
 	methods := make(map[string]*Method)
 	subscriptions := make(map[string]*Method)
@@ -155,6 +166,7 @@ func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method
 	return methods, subscriptions
 }
 
+// Checks if type is an error
 func (*Registry) isErrorType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
