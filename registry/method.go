@@ -57,7 +57,7 @@ func (m *Method) Call(ctx context.Context, method string, args []reflect.Value, 
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
 			// fmt.Fprintln(ioutil.Discard, buf)
-			fmt.Println(buf)
+			fmt.Println(string(buf))
 			errRes = errors.New("method handler crashed")
 		}
 	}()
