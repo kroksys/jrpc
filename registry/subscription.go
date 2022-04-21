@@ -11,7 +11,7 @@ import (
 // used.
 type Subscription struct {
 	methodName string
-	conn       *conn.Conn
+	Conn       *conn.Conn
 }
 
 // Creates new Subscription with its name and write channel.
@@ -22,7 +22,7 @@ func NewSubscription(methodName string, c ...*conn.Conn) *Subscription {
 	}
 	return &Subscription{
 		methodName: methodName,
-		conn:       c[0],
+		Conn:       c[0],
 	}
 }
 
@@ -31,8 +31,8 @@ func (s *Subscription) Notify(data interface{}) bool {
 	n := spec.NewNotification()
 	n.Method = s.methodName
 	n.Params = data
-	if !s.conn.Stopped {
-		s.conn.Write <- n
+	if !s.Conn.Stopped {
+		s.Conn.Write <- n
 		return true
 	}
 	return false
