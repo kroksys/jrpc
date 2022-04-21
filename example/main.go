@@ -14,8 +14,9 @@ func main() {
 	if err := jrpcServer.Register("example", Example{}); err != nil {
 		log.Panicln(err)
 	}
+
 	r := gin.Default()
-	r.GET("/ws", gin.WrapF(jrpcServer.WebsocketHandler))
+	r.GET("/ws", jrpcServer.WebsocketHandlerGin)
 	log.Printf("JSON RPC 2.0 server started. Address: %s/ws\n", host)
 	err := r.Run(host)
 	if err != nil {
