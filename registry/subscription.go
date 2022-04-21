@@ -10,8 +10,9 @@ import (
 // that it will be used as subscription and should block the thread while its
 // used.
 type Subscription struct {
-	methodName string
-	Conn       *conn.Conn
+	methodName  string
+	Conn        *conn.Conn
+	Unsubscribe chan interface{}
 }
 
 // Creates new Subscription with its name and write channel.
@@ -21,8 +22,9 @@ func NewSubscription(methodName string, c ...*conn.Conn) *Subscription {
 		return nil
 	}
 	return &Subscription{
-		methodName: methodName,
-		Conn:       c[0],
+		methodName:  methodName,
+		Conn:        c[0],
+		Unsubscribe: make(chan interface{}),
 	}
 }
 
