@@ -43,26 +43,22 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 			data, tp := spec.Parse(msg)
 			switch tp {
 			case spec.TypeRequest:
-				go func() {
-					request := data.(spec.Request)
-					resp := s.Registry.Call(ctx, request, c)
-					responseData, err := json.Marshal(resp)
-					if err != nil {
-						return
-					}
-					c.Send(responseData)
-				}()
-			case spec.TypeNotification:
-				// notification := data.(spec.Notification)
-			}
-		case notif := <-c.Write:
-			go func() {
-				responseData, err := json.Marshal(notif)
+				request := data.(spec.Request)
+				resp := s.Registry.Call(ctx, request, c)
+				responseData, err := json.Marshal(resp)
 				if err != nil {
 					return
 				}
 				c.Send(responseData)
-			}()
+			case spec.TypeNotification:
+				// notification := data.(spec.Notification)
+			}
+		case notif := <-c.Write:
+			responseData, err := json.Marshal(notif)
+			if err != nil {
+				return
+			}
+			c.Send(responseData)
 		case msg := <-c.Out:
 			c.Send(msg)
 		case <-pinger.C:
