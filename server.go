@@ -50,7 +50,7 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 					if err != nil {
 						return
 					}
-					c.Out <- responseData
+					c.Send(responseData)
 				}()
 			case spec.TypeNotification:
 				// notification := data.(spec.Notification)
@@ -61,7 +61,7 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 				if err != nil {
 					return
 				}
-				c.Out <- responseData
+				c.Send(responseData)
 			}()
 		case msg := <-c.Out:
 			c.Send(msg)
