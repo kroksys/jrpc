@@ -8,6 +8,9 @@ VERSION_NEXT=$(shell echo "$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_MICRO_NEX
 version-up:
 	@echo $(VERSION_NEXT) > version
 upgrade: version-up
+	git add .
+	git commit -m "update version to $(shell cat version)"
 	git tag $(shell cat version)
 	git push origin --tags
+	git push
 .PHONY: version-up upgrade
