@@ -12,7 +12,7 @@ import (
 type Subscription struct {
 	methodName  string
 	Conn        *conn.Conn
-	Unsubscribe chan interface{}
+	Unsubscribe chan bool
 }
 
 // Creates new Subscription with its name and write channel.
@@ -24,7 +24,7 @@ func NewSubscription(methodName string, c ...*conn.Conn) *Subscription {
 	return &Subscription{
 		methodName:  methodName,
 		Conn:        c[0],
-		Unsubscribe: make(chan interface{}),
+		Unsubscribe: make(chan bool),
 	}
 }
 

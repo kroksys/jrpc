@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 
 	"github.com/kroksys/jrpc/conn"
 	"github.com/kroksys/jrpc/spec"
+	"github.com/kroksys/pool"
 )
 
 var (
@@ -19,20 +19,26 @@ var (
 
 // Registry for registering struct methods and subscriptions
 type Registry struct {
-	services map[string]Service
-	lock     sync.Mutex
+
+	// Registered services holding methods and subscriptions
+	services *pool.PoolStr[Service]
+
+	// holds active subscriptions
+	//  key = conn.Conn.ID + subscription.methodName
+	subscriptions *pool.PoolStr[*Subscription]
 }
 
 // Creates new Registry with initialised services map
 func NewRegistry() *Registry {
 	return &Registry{
-		services: make(map[string]Service),
+		services:      pool.NewPoolStr[Service](),
+		subscriptions: pool.NewPoolStr[*Subscription](),
 	}
 }
 
 // Call a method based on json-rpc Request. If a request is notification
 // a Notification struct will be initialised and write channel attached to it.
-func (reg *Registry) Call(ctx context.Context, req spec.Request, c ...*conn.Conn) spec.Response {
+func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) spec.Response {
 	result := spec.NewResponse(req.ID, nil)
 	split := strings.Split(req.Method, "_")
 	if len(split) != 2 && len(split) != 3 {
@@ -41,13 +47,34 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c ...*conn.Conn
 	}
 	serviceName, methodName := split[0], strings.ToLower(split[1])
 	var fn *Method
-	if methodName == "subscribe" {
-		var subscriptionName = ""
+	var sub *Subscription
+	if methodName == "subscribe" || methodName == "unsubscribe" {
 		if len(split) == 3 {
-			subscriptionName = split[2]
-			fn = reg.FindSubscription(serviceName, subscriptionName)
+			fn = reg.FindSubscription(serviceName, strings.ToLower(split[2]))
 		} else {
 			fn = reg.FindSubscription(serviceName)
+		}
+		if fn == nil {
+			result.Error = spec.NewError(spec.InternalErrorCode, "invalid subscription name")
+			return result
+		}
+		var ok bool
+		sub, ok = reg.subscriptions.GetOk(c.ID + fn.name)
+		if methodName == "subscribe" {
+			if ok {
+				result.Error = spec.NewError(spec.InternalErrorCode, "already subscribled")
+				return result
+			}
+			sub = NewSubscription(fn.name, c)
+			reg.subscriptions.Put(c.ID+fn.name, sub)
+		} else {
+			if !ok {
+				result.Error = spec.NewError(spec.InternalErrorCode, "not subscribled")
+				return result
+			}
+			close(sub.Unsubscribe)
+			reg.subscriptions.Delete(c.ID + fn.name)
+			return result
 		}
 	} else { // Method
 		fn = reg.FindMethod(serviceName, methodName)
@@ -62,7 +89,8 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c ...*conn.Conn
 		result.Error = spec.NewError(spec.InvalidParamsCode, err.Error())
 		return result
 	}
-	callResponse, err := fn.Call(ctx, methodName, args, NewSubscription(methodName, c...))
+	callResponse, err := fn.Call(ctx, methodName, args, sub)
+	reg.subscriptions.Delete(c.ID + fn.name)
 	if err != nil {
 		result.Error = spec.NewError(spec.InternalErrorCode, err.Error())
 		return result
@@ -78,38 +106,34 @@ func (reg *Registry) Register(name string, service interface{}) error {
 	if len(methods)+len(subscriptions) == 0 {
 		return fmt.Errorf("service %T doesn't have methods to expose", service)
 	}
-	reg.lock.Lock()
-	defer reg.lock.Unlock()
-	if _, ok := reg.services[name]; !ok {
-		reg.services[name] = Service{
+
+	if _, ok := reg.services.GetOk(name); !ok {
+		reg.services.Put(name, Service{
 			Name:          name,
 			methods:       methods,
 			subscriptions: subscriptions,
-		}
+		})
 	}
 	return nil
 }
 
 // Finds method in registry
 func (reg *Registry) FindMethod(service, name string) *Method {
-	reg.lock.Lock()
-	defer reg.lock.Unlock()
-	return reg.services[service].methods[name]
+	return reg.services.Get(service).methods[name]
 }
 
 // Finds subscription in registry. Subscription in this case is just a method
 // that can be called.
 func (reg *Registry) FindSubscription(service string, name ...string) *Method {
-	reg.lock.Lock()
-	defer reg.lock.Unlock()
+	s := reg.services.Get(service)
 	if len(name) == 1 {
-		return reg.services[service].subscriptions[name[0]]
+		return s.subscriptions[name[0]]
 	}
-	if len(reg.services[service].subscriptions) != 1 {
+	if len(s.subscriptions) != 1 {
 		return nil
 	}
-	for k := range reg.services[service].subscriptions {
-		return reg.services[service].subscriptions[k]
+	for k := range s.subscriptions {
+		return s.subscriptions[k]
 	}
 	return nil
 }
@@ -129,14 +153,14 @@ func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method
 		// Arguments
 		args := []reflect.Type{}
 		hasCtx := false
-		responseChanPos := -1
+		subPos := -1
 		for j := 1; j < fntype.NumIn(); j++ {
 			if j == 1 && fntype.In(j) == contextType {
 				hasCtx = true
 				continue
 			}
 			if fntype.In(j) == subscriptionType {
-				responseChanPos = j + 1
+				subPos = j + 1
 			}
 			args = append(args, fntype.In(j))
 		}
@@ -151,14 +175,15 @@ func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method
 			}
 		}
 		meth := &Method{
+			name:     m.Name,
 			receiver: theStruct,
 			fn:       m.Func,
 			args:     args,
 			errPos:   errPos,
 			hasCtx:   hasCtx,
-			chanPos:  responseChanPos,
+			subPos:   subPos,
 		}
-		if responseChanPos != -1 {
+		if subPos != -1 {
 			subscriptions[strings.ToLower(m.Name)] = meth
 		} else {
 			methods[strings.ToLower(m.Name)] = meth

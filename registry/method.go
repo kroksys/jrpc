@@ -11,12 +11,13 @@ import (
 // Method represents function in struct to be called.
 // Registering struct with registry reflects all methods as Method
 type Method struct {
+	name     string
 	receiver reflect.Value
 	fn       reflect.Value
 	args     []reflect.Type
 	errPos   int
 	hasCtx   bool
-	chanPos  int
+	subPos   int
 }
 
 // Transforms params interface coming from json parsed object to
@@ -42,9 +43,9 @@ func (m *Method) Call(ctx context.Context, method string, args []reflect.Value, 
 	if m.hasCtx {
 		callArgs = append(callArgs, reflect.ValueOf(ctx))
 	}
-	if m.chanPos != -1 {
+	if m.subPos != -1 {
 		if sub == nil {
-			return nil, errors.New("expected subscription but output channel was missing")
+			return nil, errors.New("missing subscription implementation")
 		}
 		callArgs = append(callArgs, reflect.ValueOf(sub))
 	}

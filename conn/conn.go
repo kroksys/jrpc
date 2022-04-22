@@ -6,11 +6,13 @@ import (
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/google/uuid"
 	"github.com/kroksys/jrpc/spec"
 )
 
 // Websocket connection wrapper to handle JsonRpc communication
 type Conn struct {
+	ID       string
 	C        net.Conn
 	In       chan []byte
 	Out      chan []byte
@@ -22,6 +24,7 @@ type Conn struct {
 
 func NewConn(c net.Conn) *Conn {
 	conn := Conn{
+		ID:    uuid.NewString(),
 		C:     c,
 		In:    make(chan []byte),
 		Out:   make(chan []byte),

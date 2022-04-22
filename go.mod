@@ -5,6 +5,8 @@ go 1.18
 require (
 	github.com/gin-gonic/gin v1.7.7
 	github.com/gobwas/ws v1.1.0
+	github.com/google/uuid v1.3.0
+	github.com/kroksys/pool v0.0.5
 	github.com/mitchellh/mapstructure v1.4.3
 )
 
