@@ -40,7 +40,7 @@ func NewRegistry() *Registry {
 // a Notification struct will be initialised and write channel attached to it.
 func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) spec.Response {
 	result := spec.NewResponse(req.ID, nil)
-	split := strings.Split(req.Method, "_")
+	split := strings.Split(req.Method, ".")
 	if len(split) != 2 && len(split) != 3 {
 		result.Error = spec.NewError(spec.MethodNotFoundCode, "invalid method name")
 		return result
@@ -97,6 +97,59 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 	}
 	result.Result = callResponse
 	return result
+}
+
+// Notify a method based on json-rpc Request. If a request is notification
+// a Notification struct will be initialised and write channel attached to it.
+func (reg *Registry) Notify(ctx context.Context, req spec.Notification, c *conn.Conn) *spec.Error {
+	split := strings.Split(req.Method, ".")
+	if len(split) != 2 && len(split) != 3 {
+		return spec.NewError(spec.MethodNotFoundCode, "invalid method name")
+	}
+	serviceName, methodName := split[0], strings.ToLower(split[1])
+	if methodName != "subscribe" && methodName != "unsubscribe" {
+		return spec.NewError(spec.MethodNotFoundCode, "notifications can be used only to subscribe or unsubscribe")
+	}
+
+	var fn *Method
+	if len(split) == 3 {
+		fn = reg.FindSubscription(serviceName, strings.ToLower(split[2]))
+	} else {
+		fn = reg.FindSubscription(serviceName)
+	}
+	if fn == nil {
+		return spec.NewError(spec.MethodNotFoundCode,
+			fmt.Sprintf("missing subscription %s", req.Method))
+	}
+
+	sub, ok := reg.subscriptions.GetOk(c.ID + fn.name)
+	switch methodName {
+	case "subscribe":
+		if ok {
+			return spec.NewError(spec.InternalErrorCode, "already subscribled")
+		}
+		sub = NewSubscription(fn.name, c)
+		reg.subscriptions.Put(c.ID+fn.name, sub)
+	case "unsubscribe":
+		if !ok {
+			return spec.NewError(spec.InternalErrorCode, "not subscribled")
+		}
+		close(sub.Unsubscribe)
+		reg.subscriptions.Delete(c.ID + fn.name)
+		return nil
+	}
+
+	args, err := fn.ParseArgs(req.Params)
+	if err != nil {
+		return spec.NewError(spec.InvalidParamsCode, err.Error())
+	}
+
+	_, err = fn.Call(ctx, methodName, args, sub)
+	reg.subscriptions.Delete(c.ID + fn.name)
+	if err != nil {
+		return spec.NewError(spec.InternalErrorCode, err.Error())
+	}
+	return nil
 }
 
 // Register struct methods in registry. This should be called when server is

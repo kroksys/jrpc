@@ -53,7 +53,17 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 					c.Send(responseData)
 				}()
 			case spec.TypeNotification:
-				// notification := data.(spec.Notification)
+				go func() {
+					notification := data.(spec.Notification)
+					err := s.Registry.Notify(ctx, notification, c)
+					if err != nil {
+						errData, err := json.Marshal(err)
+						if err != nil {
+							return
+						}
+						c.Send(errData)
+					}
+				}()
 			}
 		case notif := <-c.Write:
 			go func() {

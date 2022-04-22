@@ -26,7 +26,11 @@ func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
 	result := make([]reflect.Value, 0, len(m.args))
 	switch reflect.ValueOf(params).Kind() {
 	case reflect.Slice:
-		if len(m.args) != len(params.([]interface{})) {
+		argCount := len(m.args)
+		if m.subPos != -1 {
+			argCount--
+		}
+		if argCount != len(params.([]interface{})) {
 			return nil, fmt.Errorf("arguments count does not match, expected %d arguments", len(m.args))
 		}
 		for i, param := range params.([]interface{}) {
