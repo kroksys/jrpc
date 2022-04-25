@@ -60,7 +60,6 @@ func (Example) SimpleWithContext(ctx context.Context, x, y int) (int, error) {
 
 func (Example) Subscription(sub *registry.Subscription) error {
 	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
 		select {
 		case <-sub.Unsubscribe:
 			return nil
