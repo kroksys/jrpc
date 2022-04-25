@@ -78,24 +78,32 @@ func (Example) Subscription(sub *registry.Subscription) error {
 When the server is running connect to the ```ws://localhost:3333/ws```server (i.e. using postman) and send json data bellow to trigger methods and get response.
 ```json
 {"jsonrpc":"2.0","method":"example.Simple", "params": [2, 3], "id":2865}
-// Response: {"jsonrpc":"2.0","result":5,"id":2865}
+```
+Response: {"jsonrpc":"2.0","result":5,"id":2865}
 
+```json
 {"jsonrpc":"2.0","method":"example.SimpleNoParams","id":2866}
-// Error response because function returns error:
-// {"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"simple error"},"id":2866}
+```
+Response: {"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"simple error"},"id":2866} Error response because function returns error.
 
+```json
 {"jsonrpc":"2.0","method":"example.SimpleWithContext", "params": [2, 3], "id":2866}
-// Response: {"jsonrpc":"2.0","result":5,"id":2866}
+```
+Response: {"jsonrpc":"2.0","result":5,"id":2866}
 
-// Subscribe to regular updates usgin request
+Subscribe to regular updates usgin request
+```json
 {"jsonrpc":"2.0","method":"example.subscribe.Subscription","id":2868}
 {"jsonrpc":"2.0","method":"example.unsubscribe.Subscription","id":2869}
+```
 
-// Or using notifications
+Or using notifications
+```json
 {"jsonrpc":"2.0","method":"example.subscribe.Subscription"}
 {"jsonrpc":"2.0","method":"example.unsubscribe.Subscription"}
-
 ```
+
+
 ## Authors
 
 - [@kroksys](https://www.github.com/kroksys)
