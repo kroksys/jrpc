@@ -32,6 +32,10 @@ func (Example) Subscription(sub *registry.Subscription) error {
 		select {
 		case <-sub.Unsubscribe:
 			return nil
+		case _, ok := <-sub.Conn.Exit:
+			if !ok {
+				return nil
+			}
 		default:
 			if !sub.Notify("Hello") {
 				return nil
@@ -48,6 +52,10 @@ func (Example) SubscriptionWithContext(ctx context.Context, sub *registry.Subscr
 		select {
 		case <-sub.Unsubscribe:
 			return nil
+		case _, ok := <-sub.Conn.Exit:
+			if !ok {
+				return nil
+			}
 		default:
 			if !sub.Notify("Hello") {
 				return errors.New("connection closed")
