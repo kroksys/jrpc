@@ -39,11 +39,17 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 	defer pinger.Stop()
 	for {
 		select {
+		case <-pinger.C:
+			c.Ping()
+		case _, running := <-c.Exit:
+			if !running {
+				return
+			}
 		case msg := <-c.In:
-			data, tp := spec.Parse(msg)
-			switch tp {
-			case spec.TypeRequest:
-				go func() {
+			go func() {
+				data, tp := spec.Parse(msg)
+				switch tp {
+				case spec.TypeRequest:
 					request := data.(spec.Request)
 					resp := s.Registry.Call(ctx, request, c)
 					responseData, err := json.Marshal(resp)
@@ -51,11 +57,9 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 						return
 					}
 					c.Send(responseData)
-				}()
-			case spec.TypeNotification:
-				go func() {
+				case spec.TypeNotification:
 					notification := data.(spec.Notification)
-					err := s.Registry.Notify(ctx, notification, c)
+					err := s.Registry.Subscribe(ctx, notification, c)
 					if err != nil {
 						errData, err := json.Marshal(err)
 						if err != nil {
@@ -63,22 +67,8 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 						}
 						c.Send(errData)
 					}
-				}()
-			}
-		case notif := <-c.Write:
-			go func() {
-				responseData, err := json.Marshal(notif)
-				if err != nil {
-					return
 				}
-				c.Send(responseData)
 			}()
-		case msg := <-c.Out:
-			c.Send(msg)
-		case <-pinger.C:
-			c.Ping()
-		case <-c.Exit:
-			return
 		}
 	}
 }

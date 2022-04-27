@@ -28,40 +28,26 @@ func (Example) SimpleWithContext(ctx context.Context, x, y int) (int, error) {
 
 func (Example) Subscription(sub *registry.Subscription) error {
 	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		select {
-		case <-sub.Unsubscribe:
-			return nil
-		case _, ok := <-sub.Conn.Exit:
-			if !ok {
-				return nil
-			}
-		default:
-			if !sub.Notify("Hello") {
-				return nil
-			}
-			time.Sleep(time.Second)
+		if !sub.IsRunning() {
+			break
 		}
+		if err := sub.Notify("Hello"); err != nil {
+			return err
+		}
+		time.Sleep(time.Second)
 	}
 	return nil
 }
 
 func (Example) SubscriptionWithContext(ctx context.Context, sub *registry.Subscription) error {
 	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-		select {
-		case <-sub.Unsubscribe:
-			return nil
-		case _, ok := <-sub.Conn.Exit:
-			if !ok {
-				return nil
-			}
-		default:
-			if !sub.Notify("Hello") {
-				return errors.New("connection closed")
-			}
-			time.Sleep(time.Second)
+		if !sub.IsRunning() {
+			break
 		}
+		if err := sub.Notify("Hello"); err != nil {
+			return err
+		}
+		time.Sleep(time.Second)
 	}
 	return errors.New("expected subscription break")
 }

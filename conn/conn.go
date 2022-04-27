@@ -1,35 +1,30 @@
 package conn
 
 import (
+	"errors"
 	"net"
 	"sync"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
-	"github.com/kroksys/jrpc/spec"
 )
 
 // Websocket connection wrapper to handle JsonRpc communication
 type Conn struct {
-	ID       string
-	C        net.Conn
-	In       chan []byte
-	Out      chan []byte
-	Exit     chan interface{}
-	exitOnce sync.Once
-	Stopped  bool
-	Write    chan spec.Notification
+	ID        string
+	c         net.Conn
+	In        chan []byte
+	Exit      chan interface{}
+	closeOnce sync.Once
 }
 
 func NewConn(c net.Conn) *Conn {
 	conn := Conn{
-		ID:    uuid.NewString(),
-		C:     c,
-		In:    make(chan []byte),
-		Out:   make(chan []byte),
-		Exit:  make(chan interface{}),
-		Write: make(chan spec.Notification),
+		ID:   uuid.NewString(),
+		c:    c,
+		In:   make(chan []byte),
+		Exit: make(chan interface{}),
 	}
 	conn.GoRead()
 	return &conn
@@ -37,10 +32,10 @@ func NewConn(c net.Conn) *Conn {
 
 // Sends ping message to the connection
 func (c *Conn) Ping() {
-	if c.Stopped {
+	if !c.isRunning() {
 		return
 	}
-	err := wsutil.WriteServerMessage(c.C, ws.OpPing, ws.CompiledPing)
+	err := wsutil.WriteServerMessage(c.c, ws.OpPing, ws.CompiledPing)
 	if err != nil {
 		c.Close()
 		return
@@ -49,13 +44,10 @@ func (c *Conn) Ping() {
 
 // Closes connection and its channels
 func (c *Conn) Close() {
-	c.exitOnce.Do(func() {
-		wsutil.WriteServerMessage(c.C, ws.OpClose, nil)
-		c.Stopped = true
+	c.closeOnce.Do(func() {
+		wsutil.WriteServerMessage(c.c, ws.OpClose, nil)
 		close(c.Exit)
 		close(c.In)
-		close(c.Out)
-		close(c.Write)
 	})
 }
 
@@ -63,10 +55,10 @@ func (c *Conn) Close() {
 func (c *Conn) GoRead() {
 	go func() {
 		for {
-			if c.Stopped {
+			if !c.isRunning() {
 				return
 			}
-			msg, _, err := wsutil.ReadClientData(c.C)
+			msg, _, err := wsutil.ReadClientData(c.c)
 			if err != nil {
 				c.Close()
 				break
@@ -77,13 +69,24 @@ func (c *Conn) GoRead() {
 }
 
 // writes data to the connection
-func (c *Conn) Send(msg []byte) {
-	if c.Stopped {
-		return
+func (c *Conn) Send(msg []byte) error {
+	if !c.isRunning() {
+		return errors.New("cant send data to connection: connection is not running anymore")
 	}
-	err := wsutil.WriteServerMessage(c.C, ws.OpText, msg)
+	err := wsutil.WriteServerMessage(c.c, ws.OpText, msg)
 	if err != nil {
 		c.Close()
-		return
 	}
+	return err
+}
+
+// Checks if connection is still running by reading from conn.Exit chanel.
+// When connection is closed Exit chanel will be closed and will return false.
+func (c *Conn) isRunning() bool {
+	select {
+	case _, running := <-c.Exit:
+		return running
+	default:
+	}
+	return true
 }

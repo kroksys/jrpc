@@ -17,14 +17,15 @@ var (
 	contextType      = reflect.TypeOf((*context.Context)(nil)).Elem()
 )
 
-// Registry for registering struct methods and subscriptions
+// Register struct as a service for jrpc-ws to handle automatically.
+// Keeps track of subscriptions.
 type Registry struct {
 
-	// Registered services holding methods and subscriptions
+	// Registered services
 	services *pool.PoolStr[Service]
 
-	// holds active subscriptions
-	//  key = conn.Conn.ID + subscription.methodName
+	// Holds active subscriptions.
+	// Subscription[key] - key = conn.Conn.ID + subscription.methodName
 	subscriptions *pool.PoolStr[*Subscription]
 }
 
@@ -66,14 +67,15 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 				return result
 			}
 			sub = NewSubscription(fn.name, c)
-			reg.subscriptions.Put(c.ID+fn.name, sub)
+			reg.subscriptions.Put(sub.ID(), sub)
+			defer reg.subscriptions.Delete(sub.ID())
 		} else {
 			if !ok {
 				result.Error = spec.NewError(spec.InternalErrorCode, "not subscribled")
 				return result
 			}
-			close(sub.Unsubscribe)
-			reg.subscriptions.Delete(c.ID + fn.name)
+			sub.Close()
+			reg.subscriptions.Delete(sub.ID())
 			return result
 		}
 	} else { // Method
@@ -90,7 +92,6 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 		return result
 	}
 	callResponse, err := fn.Call(ctx, methodName, args, sub)
-	reg.subscriptions.Delete(c.ID + fn.name)
 	if err != nil {
 		result.Error = spec.NewError(spec.InternalErrorCode, err.Error())
 		return result
@@ -101,7 +102,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 
 // Notify a method based on json-rpc Request. If a request is notification
 // a Notification struct will be initialised and write channel attached to it.
-func (reg *Registry) Notify(ctx context.Context, req spec.Notification, c *conn.Conn) *spec.Error {
+func (reg *Registry) Subscribe(ctx context.Context, req spec.Notification, c *conn.Conn) *spec.Error {
 	split := strings.Split(req.Method, ".")
 	if len(split) != 2 && len(split) != 3 {
 		return spec.NewError(spec.MethodNotFoundCode, "invalid method name")
@@ -129,13 +130,14 @@ func (reg *Registry) Notify(ctx context.Context, req spec.Notification, c *conn.
 			return spec.NewError(spec.InternalErrorCode, "already subscribled")
 		}
 		sub = NewSubscription(fn.name, c)
-		reg.subscriptions.Put(c.ID+fn.name, sub)
+		reg.subscriptions.Put(sub.ID(), sub)
+		defer reg.subscriptions.Delete(sub.ID())
 	case "unsubscribe":
 		if !ok {
 			return spec.NewError(spec.InternalErrorCode, "not subscribled")
 		}
-		close(sub.Unsubscribe)
-		reg.subscriptions.Delete(c.ID + fn.name)
+		sub.Close()
+		reg.subscriptions.Delete(sub.ID())
 		return nil
 	}
 
@@ -145,7 +147,6 @@ func (reg *Registry) Notify(ctx context.Context, req spec.Notification, c *conn.
 	}
 
 	_, err = fn.Call(ctx, methodName, args, sub)
-	reg.subscriptions.Delete(c.ID + fn.name)
 	if err != nil {
 		return spec.NewError(spec.InternalErrorCode, err.Error())
 	}
