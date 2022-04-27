@@ -41,13 +41,18 @@ func (Example) Subscription(sub *registry.Subscription) error {
 
 func (Example) SubscriptionWithContext(ctx context.Context, sub *registry.Subscription) error {
 	for i := 0; i < 10; i++ {
-		if !sub.IsRunning() {
-			break
+		// <-sub.Exit and <-sub.Conn.Exit == !sub.IsRunning()
+		select {
+		case <-sub.Exit:
+			return nil
+		case <-sub.Conn.Exit:
+			return nil
+		default:
+			if err := sub.Notify("Hello"); err != nil {
+				return err
+			}
+			time.Sleep(time.Second)
 		}
-		if err := sub.Notify("Hello"); err != nil {
-			return err
-		}
-		time.Sleep(time.Second)
 	}
 	return errors.New("expected subscription break")
 }
