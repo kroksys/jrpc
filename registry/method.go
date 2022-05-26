@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 )
 
 // Method represents function in struct to be called.
@@ -24,20 +25,55 @@ type Method struct {
 // reflect values. It is neccessary to Call a Method.
 func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
 	result := make([]reflect.Value, 0, len(m.args))
+	argCount := len(m.args)
+	if m.subPos != -1 {
+		argCount--
+	}
 	switch reflect.ValueOf(params).Kind() {
 	case reflect.Slice:
-		argCount := len(m.args)
-		if m.subPos != -1 {
-			argCount--
-		}
 		if argCount != len(params.([]interface{})) {
 			return nil, fmt.Errorf("arguments count does not match, expected %d arguments", len(m.args))
 		}
 		for i, param := range params.([]interface{}) {
 			result = append(result, reflect.ValueOf(param).Convert(m.args[i]))
 		}
+	case reflect.Map:
+		if argCount != 1 {
+			return nil, fmt.Errorf("arguments count does not match, expected %d arguments", len(m.args))
+		}
+		argObject := reflect.New(m.args[0])
+		argInterf := argObject.Interface()
+		for k, v := range params.(map[string]interface{}) {
+			err := SetInterfaceField(argInterf, k, v)
+			if err != nil {
+				return nil, fmt.Errorf("error decoding param object: %s", err.Error())
+			}
+		}
+		result = append(result, argObject.Elem())
 	}
 	return result, nil
+}
+
+// Sets value (by name) of struct object created with reflect.New()
+func SetInterfaceField(obj interface{}, name string, value interface{}) error {
+	structValue := reflect.ValueOf(obj).Elem()
+	name = strings.ToLower(name)
+	structFieldValue := structValue.FieldByNameFunc(func(n string) bool {
+		return strings.ToLower(n) == name
+	})
+	if !structFieldValue.IsValid() {
+		return fmt.Errorf("no such field: %s in obj", name)
+	}
+	if !structFieldValue.CanSet() {
+		return fmt.Errorf("cannot set %s field value", name)
+	}
+	structFieldType := structFieldValue.Type()
+	val := reflect.ValueOf(value).Convert(structFieldValue.Type())
+	if structFieldType != val.Type() {
+		return errors.New("provided value type didn't match obj field type")
+	}
+	structFieldValue.Set(val)
+	return nil
 }
 
 // Executes function with given parameters. If a method is subscription it passes Subscription
