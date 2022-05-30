@@ -66,7 +66,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 				result.Error = spec.NewError(spec.InternalErrorCode, "already subscribled")
 				return result
 			}
-			sub = NewSubscription(fn.name, c)
+			sub = NewSubscription(fn.name, req.ID, c)
 			reg.subscriptions.Put(sub.ID(), sub)
 			defer reg.subscriptions.Delete(sub.ID())
 		} else {
@@ -129,7 +129,7 @@ func (reg *Registry) Subscribe(ctx context.Context, req spec.Notification, c *co
 		if ok {
 			return spec.NewError(spec.InternalErrorCode, "already subscribled")
 		}
-		sub = NewSubscription(fn.name, c)
+		sub = NewSubscription(fn.name, nil, c)
 		reg.subscriptions.Put(sub.ID(), sub)
 		defer reg.subscriptions.Delete(sub.ID())
 	case "unsubscribe":

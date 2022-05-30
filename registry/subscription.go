@@ -13,6 +13,9 @@ import (
 // that it will be used as subscription and should block the thread while its
 // used.
 type Subscription struct {
+	// ID provided by client request
+	MessageID interface{}
+
 	// Pointer to connection used to send data
 	Conn *conn.Conn
 
@@ -26,8 +29,12 @@ type Subscription struct {
 
 // Creates new Subscription with its name and write channel.
 // Returns nil if chanel is not provided.
-func NewSubscription(methodName string, c *conn.Conn) *Subscription {
+func NewSubscription(methodName string, id interface{}, c *conn.Conn) *Subscription {
+	if id == nil {
+		id = methodName
+	}
 	return &Subscription{
+		MessageID:  id,
 		Conn:       c,
 		Exit:       make(chan interface{}),
 		methodName: methodName,
@@ -63,9 +70,7 @@ func (s *Subscription) IsRunning() bool {
 
 // Sends json-rpc Notification to the open connection.
 func (s *Subscription) Notify(data interface{}) error {
-	n := spec.NewNotification()
-	n.Method = s.methodName
-	n.Params = data
+	n := spec.NewResponse(s.MessageID, data)
 
 	responseData, err := json.Marshal(n)
 	if err != nil {
