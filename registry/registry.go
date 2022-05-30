@@ -63,7 +63,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 		sub, ok = reg.subscriptions.GetOk(c.ID + fn.name)
 		if methodName == "subscribe" {
 			if ok {
-				result.Error = spec.NewError(spec.InternalErrorCode, "already subscribled")
+				result.Error = spec.NewError(spec.InternalErrorCode, "already subscribed")
 				return result
 			}
 			sub = NewSubscription(fn.name, req.ID, c)
@@ -71,7 +71,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) s
 			defer reg.subscriptions.Delete(sub.ID())
 		} else {
 			if !ok {
-				result.Error = spec.NewError(spec.InternalErrorCode, "not subscribled")
+				result.Error = spec.NewError(spec.InternalErrorCode, "not subscribed")
 				return result
 			}
 			sub.Close()
