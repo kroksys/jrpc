@@ -77,7 +77,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (
 			}
 			sub.Close()
 			reg.subscriptions.Delete(sub.ID())
-			return result, false
+			return result, true
 		}
 	} else { // Method
 		fn = reg.FindMethod(serviceName, methodName)
@@ -98,7 +98,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (
 		return result, true
 	}
 	result.Result = callResponse
-	return result, true
+	return result, sub == nil
 }
 
 // Notify a method based on json-rpc Request. If a request is notification
