@@ -51,12 +51,14 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 				switch tp {
 				case spec.TypeRequest:
 					request := data.(spec.Request)
-					resp := s.Registry.Call(ctx, request, c)
-					responseData, err := json.Marshal(resp)
-					if err != nil {
-						return
+					resp, shouldReply := s.Registry.Call(ctx, request, c)
+					if shouldReply {
+						responseData, err := json.Marshal(resp)
+						if err != nil {
+							return
+						}
+						c.Send(responseData)
 					}
-					c.Send(responseData)
 				case spec.TypeNotification:
 					notification := data.(spec.Notification)
 					err := s.Registry.Subscribe(ctx, notification, c)
