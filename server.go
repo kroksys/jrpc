@@ -63,7 +63,7 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 							return
 						}
 						if s.LogsOn {
-							log.Printf("Response Id:%v Result:%.*v\n", resp.ID, 20, resp.Result)
+							log.Printf("Response Id:%v Result:%v Err: %v\n", resp.ID, resp.Result, resp.Error)
 						}
 						c.Send(responseData)
 					}
