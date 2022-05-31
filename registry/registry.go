@@ -20,6 +20,8 @@ var (
 // Register struct as a service for jrpc-ws to handle automatically.
 // Keeps track of subscriptions.
 type Registry struct {
+	// Flag to turn on/off logs for server
+	LogsOn bool
 
 	// Registered services
 	services *pool.PoolStr[Service]
@@ -30,10 +32,11 @@ type Registry struct {
 }
 
 // Creates new Registry with initialised services map
-func NewRegistry() *Registry {
+func NewRegistry(logsOn bool) *Registry {
 	return &Registry{
 		services:      pool.NewPoolStr[Service](),
 		subscriptions: pool.NewPoolStr[*Subscription](),
+		LogsOn:        logsOn,
 	}
 }
 
@@ -67,7 +70,7 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (
 				result.Error = spec.NewError(spec.InternalErrorCode, "already subscribed")
 				return result, true
 			}
-			sub = NewSubscription(fn.name, req.ID, c)
+			sub = NewSubscription(fn.name, req.ID, c, reg.LogsOn)
 			reg.subscriptions.Put(sub.ID(), sub)
 			defer reg.subscriptions.Delete(sub.ID())
 		} else {
@@ -130,7 +133,7 @@ func (reg *Registry) Subscribe(ctx context.Context, req spec.Notification, c *co
 		if ok {
 			return spec.NewError(spec.InternalErrorCode, "already subscribled")
 		}
-		sub = NewSubscription(fn.name, nil, c)
+		sub = NewSubscription(fn.name, nil, c, reg.LogsOn)
 		reg.subscriptions.Put(sub.ID(), sub)
 		defer reg.subscriptions.Delete(sub.ID())
 	case "unsubscribe":

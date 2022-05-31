@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"log"
 	"sync"
 
 	"github.com/kroksys/jrpc/conn"
@@ -13,6 +14,9 @@ import (
 // that it will be used as subscription and should block the thread while its
 // used.
 type Subscription struct {
+	// Flag to turn on/off logs for server
+	LogsOn bool
+
 	// ID provided by client request
 	MessageID interface{}
 
@@ -29,7 +33,7 @@ type Subscription struct {
 
 // Creates new Subscription with its name and write channel.
 // Returns nil if chanel is not provided.
-func NewSubscription(methodName string, id interface{}, c *conn.Conn) *Subscription {
+func NewSubscription(methodName string, id interface{}, c *conn.Conn, logsOn bool) *Subscription {
 	if id == nil {
 		id = methodName
 	}
@@ -38,6 +42,7 @@ func NewSubscription(methodName string, id interface{}, c *conn.Conn) *Subscript
 		Conn:       c,
 		Exit:       make(chan interface{}),
 		methodName: methodName,
+		LogsOn:     logsOn,
 	}
 }
 
@@ -74,9 +79,15 @@ func (s *Subscription) Notify(data interface{}) error {
 
 	responseData, err := json.Marshal(n)
 	if err != nil {
+		if s.LogsOn {
+			log.Printf("Error:%s:json.Marshal error: %s", s.methodName, err.Error())
+		}
 		return err
 	}
 
+	if s.LogsOn {
+		log.Printf("Response:%s Id:%v Result:%.*v\n", s.methodName, n.ID, 20, n.Result)
+	}
 	err = s.Conn.Send(responseData)
 	if err != nil {
 		s.Close()

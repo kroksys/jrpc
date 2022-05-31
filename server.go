@@ -21,12 +21,14 @@ const (
 // Server is just a parent for json-rpc server using websockets
 type Server struct {
 	*registry.Registry
+	LogsOn bool
 }
 
 // Creates new server with initialised registry
-func NewServer() *Server {
+func NewServer(logsOn bool) *Server {
 	return &Server{
-		Registry: registry.NewRegistry(),
+		Registry: registry.NewRegistry(logsOn),
+		LogsOn:   logsOn,
 	}
 }
 
@@ -51,21 +53,36 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 				switch tp {
 				case spec.TypeRequest:
 					request := data.(spec.Request)
+					if s.LogsOn {
+						log.Printf("Request Id:%v Method:%s Params: %v\n", request.ID, request.Method, request.Params)
+					}
 					resp, shouldReply := s.Registry.Call(ctx, request, c)
 					if shouldReply {
 						responseData, err := json.Marshal(resp)
 						if err != nil {
 							return
 						}
+						if s.LogsOn {
+							log.Printf("Response Id:%v Result:%.*v\n", resp.ID, 20, resp.Result)
+						}
 						c.Send(responseData)
 					}
 				case spec.TypeNotification:
 					notification := data.(spec.Notification)
+					if s.LogsOn {
+						log.Printf("Method:%s Params: %v\n", notification.Method, notification.Params)
+					}
 					err := s.Registry.Subscribe(ctx, notification, c)
 					if err != nil {
 						errData, err := json.Marshal(err)
 						if err != nil {
+							if s.LogsOn {
+								log.Printf("%s:json.Marshal error: %s", notification.Method, err.Error())
+							}
 							return
+						}
+						if s.LogsOn {
+							log.Printf("%s:error: %s", notification.Method, err.Error())
 						}
 						c.Send(errData)
 					}

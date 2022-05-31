@@ -10,7 +10,7 @@ import (
 func main() {
 	host := "localhost:3333"
 	gin.SetMode(gin.ReleaseMode)
-	jrpcServer := jrpc.NewServer()
+	jrpcServer := jrpc.NewServer(true)
 	if err := jrpcServer.Register("example", Example{}); err != nil {
 		log.Panicln(err)
 	}
