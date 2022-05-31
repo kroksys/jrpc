@@ -75,12 +75,12 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 					err := s.Registry.Subscribe(ctx, notification, c)
 					if err != nil {
 						if s.LogsOn {
-							log.Printf("%s:error: %v", notification.Method, err)
+							log.Printf("%s:error: %v\n", notification.Method, err)
 						}
 						errData, err := json.Marshal(err)
 						if err != nil {
 							if s.LogsOn {
-								log.Printf("%s:json.Marshal error: %s", notification.Method, err.Error())
+								log.Printf("%s:json.Marshal error: %s\n", notification.Method, err.Error())
 							}
 							return
 						}

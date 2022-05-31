@@ -80,7 +80,7 @@ func (s *Subscription) Notify(data interface{}) error {
 	responseData, err := json.Marshal(n)
 	if err != nil {
 		if s.LogsOn {
-			log.Printf("Error:%s:json.Marshal error: %s", s.methodName, err.Error())
+			log.Printf("Error:%s:json.Marshal error: %s\n", s.methodName, err.Error())
 		}
 		return err
 	}
