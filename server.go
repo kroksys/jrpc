@@ -82,7 +82,7 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 							return
 						}
 						if s.LogsOn {
-							log.Printf("%s:error: %s", notification.Method, err.Error())
+							log.Printf("Notification:error: %s", err.Error())
 						}
 						c.Send(errData)
 					}
