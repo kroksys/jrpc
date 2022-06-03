@@ -78,7 +78,27 @@ func (Example) SubscriptionWithParams(
 	req simpleRequest,
 ) error {
 	for i := 0; i < 10; i++ {
-		// <-sub.Exit and <-sub.Conn.Exit == !sub.IsRunning()
+		select {
+		case <-sub.Exit:
+			return nil
+		case <-sub.Conn.Exit:
+			return nil
+		default:
+			if err := sub.Notify("Hello"); err != nil {
+				return err
+			}
+			time.Sleep(time.Second)
+		}
+	}
+	return errors.New("expected subscription break")
+}
+
+func (Example) SubWithComplexStruct(
+	ctx context.Context,
+	sub *registry.Subscription,
+	req ComplexStruct,
+) error {
+	for i := 0; i < 2; i++ {
 		select {
 		case <-sub.Exit:
 			return nil

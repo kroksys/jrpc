@@ -2,12 +2,12 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"reflect"
 	"runtime"
-	"strings"
 )
 
 // Method represents function in struct to be called.
@@ -42,39 +42,14 @@ func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
 		if argCount != 1 {
 			return nil, fmt.Errorf("arguments count does not match, expected %d arguments", len(m.args))
 		}
-		argObject := reflect.New(m.args[0])
-		argInterf := argObject.Interface()
-		for k, v := range params.(map[string]interface{}) {
-			err := SetInterfaceField(argInterf, k, v)
-			if err != nil {
-				return nil, fmt.Errorf("error decoding param object: %s", err.Error())
-			}
+		bytes, err := json.Marshal(params)
+		if err != nil {
+			return result, err
 		}
-		result = append(result, argObject.Elem())
+		argInterf := newInterface(m.args[0], bytes)
+		result = append(result, reflect.ValueOf(argInterf))
 	}
 	return result, nil
-}
-
-// Sets value (by name) of struct object created with reflect.New()
-func SetInterfaceField(obj interface{}, name string, value interface{}) error {
-	structValue := reflect.ValueOf(obj).Elem()
-	name = strings.ToLower(name)
-	structFieldValue := structValue.FieldByNameFunc(func(n string) bool {
-		return strings.ToLower(n) == name
-	})
-	if !structFieldValue.IsValid() {
-		return fmt.Errorf("no such field: %s in obj", name)
-	}
-	if !structFieldValue.CanSet() {
-		return fmt.Errorf("cannot set %s field value", name)
-	}
-	structFieldType := structFieldValue.Type()
-	val := reflect.ValueOf(value).Convert(structFieldValue.Type())
-	if structFieldType != val.Type() {
-		return errors.New("provided value type didn't match obj field type")
-	}
-	structFieldValue.Set(val)
-	return nil
 }
 
 // Executes function with given parameters. If a method is subscription it passes Subscription
@@ -117,4 +92,18 @@ func (m *Method) Call(ctx context.Context, method string, args []reflect.Value, 
 	}
 
 	return outputs[0].Interface(), nil
+}
+
+// Creates new variable with given Type and unmarshal json data inside
+func newInterface(typ reflect.Type, data []byte) interface{} {
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+		dst := reflect.New(typ).Elem()
+		json.Unmarshal(data, dst.Addr().Interface())
+		return dst.Addr().Interface()
+	} else {
+		dst := reflect.New(typ).Elem()
+		json.Unmarshal(data, dst.Addr().Interface())
+		return dst.Interface()
+	}
 }
