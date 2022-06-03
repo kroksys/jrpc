@@ -218,7 +218,8 @@ func (reg *Registry) extractMethods(theStruct reflect.Value) (map[string]*Method
 				continue
 			}
 			if fntype.In(j) == subscriptionType {
-				subPos = j + 1
+				subPos = j
+				continue
 			}
 			args = append(args, fntype.In(j))
 		}

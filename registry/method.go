@@ -25,11 +25,11 @@ type Method struct {
 // Transforms params interface coming from json parsed object to
 // reflect values. It is neccessary to Call a Method.
 func (m *Method) ParseArgs(params interface{}) ([]reflect.Value, error) {
-	result := make([]reflect.Value, 0, len(m.args))
 	argCount := len(m.args)
-	if m.subPos != -1 {
-		argCount--
+	if argCount <= 0 {
+		return []reflect.Value{}, nil
 	}
+	result := make([]reflect.Value, 0, argCount)
 	switch reflect.ValueOf(params).Kind() {
 	case reflect.Slice:
 		if argCount != len(params.([]interface{})) {

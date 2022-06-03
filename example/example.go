@@ -72,6 +72,28 @@ func (Example) SubscriptionWithContext(ctx context.Context, sub *registry.Subscr
 	return errors.New("expected subscription break")
 }
 
+func (Example) SubscriptionWithParams(
+	ctx context.Context,
+	sub *registry.Subscription,
+	req simpleRequest,
+) error {
+	for i := 0; i < 10; i++ {
+		// <-sub.Exit and <-sub.Conn.Exit == !sub.IsRunning()
+		select {
+		case <-sub.Exit:
+			return nil
+		case <-sub.Conn.Exit:
+			return nil
+		default:
+			if err := sub.Notify("Hello"); err != nil {
+				return err
+			}
+			time.Sleep(time.Second)
+		}
+	}
+	return errors.New("expected subscription break")
+}
+
 // !DONT DO THIS! - Params can havel only one struct passed so this will return error.
 // Included only as an example.
 func (Example) MultipleObject(req simpleRequest, multi int) (int, error) {
