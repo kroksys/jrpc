@@ -43,12 +43,12 @@ func NewRegistry(logsOn bool) *Registry {
 // Call a method based on json-rpc Request. If a request is notification
 // a Notification struct will be initialised and write channel attached to it.
 // Returns response and ShouldReply flag.
-func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (spec.Response, bool) {
+func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) spec.Response {
 	result := spec.NewResponse(req.ID, nil)
 	split := strings.Split(req.Method, ".")
 	if len(split) != 2 && len(split) != 3 {
 		result.Error = spec.NewError(spec.MethodNotFoundCode, "invalid method name")
-		return result, true
+		return result
 	}
 	serviceName, methodName := split[0], strings.ToLower(split[1])
 	var fn *Method
@@ -61,14 +61,14 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (
 		}
 		if fn == nil {
 			result.Error = spec.NewError(spec.InternalErrorCode, "invalid subscription name")
-			return result, true
+			return result
 		}
 		var ok bool
 		sub, ok = reg.subscriptions.GetOk(c.ID + fn.name)
 		if methodName == "subscribe" {
 			if ok {
 				result.Error = spec.NewError(spec.InternalErrorCode, "already subscribed")
-				return result, true
+				return result
 			}
 			sub = NewSubscription(fn.name, req.ID, c, reg.LogsOn)
 			reg.subscriptions.Put(sub.ID(), sub)
@@ -76,11 +76,12 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (
 		} else {
 			if !ok {
 				result.Error = spec.NewError(spec.InternalErrorCode, "not subscribed")
-				return result, true
+				return result
 			}
 			sub.Close()
 			reg.subscriptions.Delete(sub.ID())
-			return result, true
+			result.Result = spec.NewResponse(req.ID, "unsubscribed")
+			return result
 		}
 	} else { // Method
 		fn = reg.FindMethod(serviceName, methodName)
@@ -88,20 +89,20 @@ func (reg *Registry) Call(ctx context.Context, req spec.Request, c *conn.Conn) (
 	if fn == nil {
 		result.Error = spec.NewError(spec.MethodNotFoundCode,
 			fmt.Sprintf("missing services %s method %s", serviceName, methodName))
-		return result, true
+		return result
 	}
 	args, err := fn.ParseArgs(req.Params)
 	if err != nil {
 		result.Error = spec.NewError(spec.InvalidParamsCode, err.Error())
-		return result, true
+		return result
 	}
 	callResponse, err := fn.Call(ctx, methodName, args, sub)
 	if err != nil {
 		result.Error = spec.NewError(spec.InternalErrorCode, err.Error())
-		return result, true
+		return result
 	}
 	result.Result = callResponse
-	return result, sub == nil
+	return result
 }
 
 // Notify a method based on json-rpc Request. If a request is notification

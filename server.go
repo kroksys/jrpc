@@ -56,17 +56,15 @@ func (s *Server) defaultConnHandler(c *conn.Conn, ctx context.Context) {
 					if s.LogsOn {
 						log.Printf("Request Id:%v Method:%s Params: %v\n", request.ID, request.Method, request.Params)
 					}
-					resp, shouldReply := s.Registry.Call(ctx, request, c)
-					if shouldReply {
-						responseData, err := json.Marshal(resp)
-						if err != nil {
-							return
-						}
-						if s.LogsOn {
-							log.Printf("Response Id:%v Result:%v Err: %v\n", resp.ID, resp.Result, resp.Error)
-						}
-						c.Send(responseData)
+					resp := s.Registry.Call(ctx, request, c)
+					responseData, err := json.Marshal(resp)
+					if err != nil {
+						return
 					}
+					if s.LogsOn {
+						log.Printf("Response Id:%v Result:%v Err: %v\n", resp.ID, resp.Result, resp.Error)
+					}
+					c.Send(responseData)
 				case spec.TypeNotification:
 					notification := data.(spec.Notification)
 					if s.LogsOn {
